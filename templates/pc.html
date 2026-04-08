@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QRDrop — PC</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f0f;
+      color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 0.25rem; }
+    .subtitle { color: #888; font-size: 0.95rem; margin-bottom: 2.5rem; }
+
+    .layout {
+      display: flex;
+      gap: 1.5rem;
+      align-items: flex-start;
+      width: 100%;
+      max-width: 880px;
+    }
+
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* QR column */
+    .col-qr { flex: 0 0 420px; }
+
+    /* "Share from PC" column */
+    .col-share { flex: 1; min-width: 0; text-align: left; }
+
+    .card-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #555;
+      margin-bottom: 1.25rem;
+      text-align: left;
+    }
+
+    #qr-container { margin: 1.5rem 0; min-height: 220px; display: flex; align-items: center; justify-content: center; }
+    #qr-img { border-radius: 12px; border: 3px solid #fff; width: 200px; height: 200px; }
+
+    #status {
+      font-size: 0.9rem;
+      color: #888;
+      margin-bottom: 1.5rem;
+      min-height: 1.4rem;
+    }
+    #status.waiting  { color: #888; }
+    #status.ready    { color: #4ade80; }
+    #status.received { color: #60a5fa; }
+
+    .btn {
+      display: inline-block;
+      padding: 0.65rem 1.4rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #fff; color: #000; }
+    .btn-ghost   { background: transparent; color: #888; border: 1px solid #333; margin-left: 0.5rem; }
+
+    #file-list { margin-top: 1.5rem; text-align: left; }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.75rem;
+      background: #111;
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      font-size: 0.88rem;
+    }
+    .file-icon { font-size: 1.2rem; }
+    .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-size { color: #666; white-space: nowrap; }
+
+    #url-display {
+      font-size: 0.78rem;
+      color: #555;
+      margin-top: 0.75rem;
+      word-break: break-all;
+    }
+
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #333;
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Share (PC → Mobile) ──────────────────────────── */
+    .share-drop {
+      border: 2px dashed #2a2a2a;
+      border-radius: 12px;
+      padding: 1.75rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 1rem;
+    }
+    .share-drop:hover, .share-drop.active { border-color: #fff; background: #222; }
+    .share-drop .icon { font-size: 2rem; margin-bottom: 0.4rem; }
+    .share-drop p { color: #888; font-size: 0.85rem; }
+    .share-drop p strong { color: #f0f0f0; }
+
+    input[type="file"] { display: none; }
+
+    #share-list { display: flex; flex-direction: column; gap: 0.4rem; }
+
+    .share-item {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.6rem 0.75rem;
+      background: #111;
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+    .share-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .share-item-size { color: #555; font-size: 0.78rem; white-space: nowrap; }
+    .share-item-status { font-size: 0.78rem; white-space: nowrap; color: #4ade80; }
+    .share-item-status.saving { color: #888; }
+
+    #share-status { font-size: 0.82rem; color: #555; margin-top: 0.75rem; min-height: 1.2rem; text-align: center; }
+
+    /* Responsive: stack columns on small screens */
+    @media (max-width: 700px) {
+      .layout { flex-direction: column; }
+      .col-qr { flex: none; width: 100%; }
+    }
+
+    /* ── Countdown (#16) ─────────────────────────────────────── */
+    #countdown-bar { margin-top: 0.6rem; }
+    .countdown-text { font-size: 0.75rem; color: #555; }
+    .countdown-text.warning { color: #fb923c; }
+    #btn-renew { font-size: 0.75rem; padding: 0.25rem 0.7rem; margin-top: 0.3rem; }
+
+    /* ── Thumbnail image (#9) ─────────────────────────────────── */
+    .file-thumb {
+      width: 40px; height: 40px;
+      object-fit: cover; border-radius: 6px; flex-shrink: 0;
+    }
+
+    /* ── File delete button (#12) ───────────────────────────── */
+    .btn-del {
+      background: transparent; border: none; color: #444;
+      cursor: pointer; font-size: 0.9rem; padding: 0 0.2rem; flex-shrink: 0;
+    }
+    .btn-del:hover { color: #f87171; }
+
+    /* ── Received texts section (#8) ────────────────────────── */
+    #text-section { margin-top: 1.25rem; text-align: left; }
+    .text-item {
+      display: flex; align-items: flex-start; gap: 0.5rem;
+      background: #111; border-radius: 8px;
+      padding: 0.6rem 0.75rem; margin-bottom: 0.4rem; font-size: 0.85rem;
+    }
+    .text-content { flex: 1; word-break: break-word; white-space: pre-wrap; color: #ccc; }
+    .btn-copy {
+      flex-shrink: 0; background: transparent;
+      border: 1px solid #333; color: #666; border-radius: 5px;
+      font-size: 0.72rem; padding: 0.15rem 0.45rem; cursor: pointer;
+    }
+    .btn-copy:hover { color: #fff; border-color: #666; }
+
+    /* ── Text to mobile (PC → Mobile) ───────────────────────── */
+    #pc-text-section { margin-top: 1.5rem; }
+    #pc-text-area {
+      width: 100%; min-height: 70px; resize: vertical;
+      background: #111; border: 1px solid #2a2a2a; border-radius: 8px;
+      color: #f0f0f0; font-size: 0.88rem; padding: 0.6rem 0.75rem;
+      font-family: inherit; margin-bottom: 0.6rem;
+    }
+    #pc-text-area:focus { outline: none; border-color: #555; }
+    #pc-text-send-btn {
+      width: 100%; padding: 0.65rem; background: #fff; color: #000;
+      border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    #pc-text-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #pc-text-send-btn:not(:disabled):hover { opacity: 0.85; }
+    #pc-text-send-status { font-size: 0.78rem; color: #888; text-align: center; margin-top: 0.4rem; min-height: 1.1rem; }
+    #pc-text-send-status.success { color: #4ade80; }
+    #pc-text-send-status.error   { color: #f87171; }
+  </style>
+</head>
+<body>
+
+  <h1>📦 QRDrop</h1>
+  <p class="subtitle">Transfère des fichiers depuis ou vers ton téléphone</p>
+
+  <div class="layout">
+
+    <!-- ── QR column (Mobile → PC) ────────────────────── -->
+    <div class="card col-qr">
+      <div id="qr-container">
+        <div class="spinner"></div>
+      </div>
+
+      <p id="status" class="waiting">Génération du QR code...</p>
+
+      <div>
+        <button class="btn btn-primary" onclick="newSession()">🔄 Nouveau QR code</button>
+      </div>
+
+      <p id="url-display"></p>
+      <div id="countdown-bar" style="display:none">
+        <p class="countdown-text" id="countdown-text"></p>
+        <button class="btn btn-ghost" id="btn-renew" onclick="renewSession()">↺ Prolonger</button>
+      </div>
+      <div id="file-list"></div>
+      <div id="text-section" style="display:none">
+        <p class="card-title" style="margin-top:1.25rem">💬 Textes reçus</p>
+        <div id="text-list"></div>
+      </div>
+    </div>
+
+    <!-- ── Share column (PC → Mobile) ─────────────────── -->
+    <div class="card col-share">
+      <p class="card-title">📤 Partager depuis le PC</p>
+
+      <div class="share-drop" id="share-drop" onclick="document.getElementById('share-input').click()">
+        <div class="icon">📁</div>
+        <p><strong>Cliquer pour choisir</strong></p>
+        <p>des fichiers à rendre disponibles sur le mobile</p>
+      </div>
+      <input type="file" id="share-input" multiple>
+
+      <div id="share-list"></div>
+      <p id="share-status"></p>
+
+      <div id="pc-text-section">
+        <p class="card-title" style="margin-top:1.5rem">💬 Send text to phone</p>
+        <textarea id="pc-text-area" placeholder="Paste or type text, a link, a note…" maxlength="10000"></textarea>
+        <button id="pc-text-send-btn" onclick="sendTextToMobile()">Send</button>
+        <p id="pc-text-send-status"></p>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let sessionId        = null;
+    let ws               = null;
+    let fileCount        = 0;
+    let sessionTimeout   = 1800;  // seconds (#16)
+    let lastActivityTime = 0;     // Date.now() at last activity (#16)
+    let countdownTimer   = null;  // countdown interval (#16)
+
+    // ── Browser notifications (#11) ─────────────────────────
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+    function _notify(title, body) {
+      if (Notification.permission === "granted") new Notification(title, { body });
+    }
+
+    // ── Session ──────────────────────────────────────────────
+    async function newSession() {
+      if (sessionId) {
+        await fetch(`/api/session/${sessionId}`, { method: "DELETE" }).catch(() => {});
+        if (ws) ws.close();
+      }
+
+      document.getElementById("qr-container").innerHTML = '<div class="spinner"></div>';
+      document.getElementById("status").textContent  = "Génération du QR code...";
+      document.getElementById("status").className    = "waiting";
+      document.getElementById("file-list").innerHTML = "";
+      document.getElementById("url-display").textContent = "";
+      document.getElementById("share-list").innerHTML    = "";
+      document.getElementById("share-status").textContent = "";
+      document.getElementById("text-list").innerHTML      = "";
+      document.getElementById("text-section").style.display  = "none";
+      document.getElementById("countdown-bar").style.display = "none";
+      if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+      fileCount = 0;
+
+      try {
+        const res  = await fetch("/api/session/new", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const data = await res.json();
+
+        sessionId = data.session_id;
+
+        const img = document.createElement("img");
+        img.id  = "qr-img";
+        img.src = `data:image/png;base64,${data.qr_base64}`;
+        img.alt = "QR Code";
+        document.getElementById("qr-container").innerHTML = "";
+        document.getElementById("qr-container").appendChild(img);
+
+        document.getElementById("status").textContent = "⏳ En attente d'un fichier...";
+        document.getElementById("status").className   = "ready";
+        document.getElementById("url-display").textContent = data.url;
+
+        connectWebSocket(sessionId);
+        startCountdown(data.timeout_seconds || 1800);  // #16
+
+      } catch (err) {
+        document.getElementById("status").textContent = "❌ Erreur : " + err.message;
+      }
+    }
+
+    // ── WebSocket ────────────────────────────────────────────
+    function connectWebSocket(sid) {
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      ws = new WebSocket(`${proto}://${location.host}/ws/${sid}`);
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "file_received")   onFileReceived(msg);
+        if (msg.type === "text_received")   onTextReceived(msg);   // #8
+        if (msg.type === "file_deleted")    onFileDeleted(msg);    // #12
+        if (msg.type === "session_expired") onSessionExpired();    // #3/#16
+      };
+
+      ws.onclose = () => {
+        if (sessionId === sid) setTimeout(() => connectWebSocket(sid), 2000);
+      };
+    }
+
+    // ── MIME icons (#7) ─────────────────────────────────────
+    function mimeIcon(mime) {
+      if (!mime) return "📄";
+      if (mime.startsWith("image/"))  return "🖼️";
+      if (mime.startsWith("video/"))  return "🎬";
+      if (mime.startsWith("audio/"))  return "🎵";
+      if (mime === "application/pdf") return "📕";
+      if (mime.includes("zip") || mime.includes("compressed") || mime.includes("x-tar")) return "🗜️";
+      if (mime.startsWith("text/"))   return "📝";
+      return "📄";
+    }
+
+    function onFileReceived(msg) {
+      fileCount++;
+      lastActivityTime = Date.now();  // #16
+      document.getElementById("status").textContent = `✅ ${fileCount} fichier(s) reçu(s)`;
+      document.getElementById("status").className   = "received";
+
+      const sizeStr = msg.size > 1_048_576
+        ? `${(msg.size / 1_048_576).toFixed(1)} Mo`
+        : `${Math.max(1, Math.round(msg.size / 1024))} Ko`;
+
+      const item = document.createElement("div");
+      item.className  = "file-item";
+      item.dataset.name = msg.name;
+
+      const isImage = msg.mime && msg.mime.startsWith("image/");
+      const iconHtml = isImage
+        ? `<img class="file-thumb" src="/api/download/${sessionId}/${encodeURIComponent(msg.name)}" alt="">`
+        : `<span class="file-icon">${mimeIcon(msg.mime)}</span>`;
+
+      item.innerHTML = `
+        ${iconHtml}
+        <span class="file-name" title="${escHtml(msg.name)}">${escHtml(msg.name)}</span>
+        <span class="file-size">${sizeStr}</span>
+        <button class="btn-del" title="Supprimer" onclick="deleteFile(${JSON.stringify(msg.name)})">✕</button>
+      `;
+      document.getElementById("file-list").prepend(item);
+      _notify("📦 QRDrop", `Fichier reçu : ${msg.name}`);  // #11
+    }
+
+    // ── Text received (#8) ──────────────────────────────────
+    function onTextReceived(msg) {
+      lastActivityTime = Date.now();  // #16
+      document.getElementById("text-section").style.display = "block";
+      const item = document.createElement("div");
+      item.className = "text-item";
+      const span = document.createElement("span");
+      span.className   = "text-content";
+      span.textContent = msg.content;
+      const btn = document.createElement("button");
+      btn.className   = "btn-copy";
+      btn.textContent = "Copier";
+      btn.onclick = () => navigator.clipboard.writeText(msg.content).then(() => {
+        btn.textContent = "✅";
+        setTimeout(() => { btn.textContent = "Copier"; }, 1500);
+      });
+      item.appendChild(span);
+      item.appendChild(btn);
+      document.getElementById("text-list").prepend(item);
+      _notify("💬 QRDrop", msg.content.length > 80 ? msg.content.slice(0, 80) + "…" : msg.content);  // #11
+    }
+
+    // ── File deletion (#12) ─────────────────────────────────
+    async function deleteFile(name) {
+      if (!sessionId) return;
+      try {
+        await fetch(`/api/files/${sessionId}/${encodeURIComponent(name)}`, { method: "DELETE" });
+      } catch (err) { console.error("Erreur suppression", name, err); }
+    }
+
+    function onFileDeleted(msg) {
+      document.querySelector(`#file-list .file-item[data-name="${CSS.escape(msg.name)}"]`)?.remove();
+    }
+
+    // ── Session expired (#3/#16) ────────────────────────────
+    function onSessionExpired() {
+      document.getElementById("status").textContent = "⚠️ Session expirée";
+      document.getElementById("status").className   = "waiting";
+      const ct = document.getElementById("countdown-text");
+      if (ct) { ct.textContent = "Session expirée"; ct.className = "countdown-text warning"; }
+      if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    }
+
+    // ── Countdown (#16) ──────────────────────────────────────
+    function startCountdown(timeoutSec) {
+      sessionTimeout   = timeoutSec;
+      lastActivityTime = Date.now();
+      document.getElementById("countdown-bar").style.display = "block";
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = setInterval(_tickCountdown, 1000);
+      _tickCountdown();
+    }
+
+    function _tickCountdown() {
+      const remaining = Math.max(0, sessionTimeout - (Date.now() - lastActivityTime) / 1000);
+      const mins = Math.floor(remaining / 60);
+      const secs = Math.floor(remaining % 60);
+      const el = document.getElementById("countdown-text");
+      el.textContent = remaining > 0
+        ? `Expire dans ${mins}m ${secs.toString().padStart(2, "0")}s`
+        : "Session expirée";
+      el.className = "countdown-text" + (remaining < 300 && remaining > 0 ? " warning" : "");
+      if (remaining === 0) { clearInterval(countdownTimer); countdownTimer = null; }
+    }
+
+    async function renewSession() {
+      if (!sessionId) return;
+      try {
+        await fetch(`/api/session/${sessionId}/renew`, { method: "POST" });
+        lastActivityTime = Date.now();
+      } catch (err) { console.error("Erreur renouvellement", err); }
+    }
+
+    // ── Text PC → Mobile ────────────────────────────────────
+    async function sendTextToMobile() {
+      const area     = document.getElementById("pc-text-area");
+      const statusEl = document.getElementById("pc-text-send-status");
+      const btn      = document.getElementById("pc-text-send-btn");
+      const content  = area.value.trim();
+      if (!content || !sessionId) return;
+
+      btn.disabled = true;
+      statusEl.textContent = "";
+      statusEl.className   = "";
+      try {
+        const res = await fetch(`/api/text-to-mobile/${sessionId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        area.value           = "";
+        statusEl.textContent = "✅ Text sent!";
+        statusEl.className   = "success";
+        setTimeout(() => { statusEl.textContent = ""; statusEl.className = ""; }, 3000);
+      } catch (err) {
+        statusEl.textContent = "❌ Error: " + err.message;
+        statusEl.className   = "error";
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ── PC → Mobile file sharing ─────────────────────────────
+    // Copies selected files to output_dir via the upload API,
+    // then broadcasts a "file_received" event to mobile via WS.
+    document.getElementById("share-input").addEventListener("change", async (e) => {
+      const files = Array.from(e.target.files);
+      e.target.value = "";  // reset to allow re-selecting the same file
+      if (!sessionId) { alert("Session non démarrée."); return; }
+
+      for (const file of files) {
+        const itemEl = addShareItem(file);
+        const statusEl = itemEl.querySelector(".share-item-status");
+
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+
+          const res  = await fetch(`/api/upload/${sessionId}`, { method: "POST", body: formData });
+          const data = await res.json();
+
+          statusEl.textContent = "✅ Disponible";
+          statusEl.className   = "share-item-status";
+
+          // Mobile is notified via WS broadcast (file_received event from server)
+          // Mobile automatically reloads its file list on file_received.
+
+        } catch (err) {
+          statusEl.textContent = "❌ Erreur";
+          statusEl.className   = "share-item-status";
+          console.error("Erreur partage", file.name, err);
+        }
+      }
+    });
+
+    function addShareItem(file) {
+      const sizeStr = file.size > 1_048_576
+        ? `${(file.size / 1_048_576).toFixed(1)} Mo`
+        : `${Math.max(1, Math.round(file.size / 1024))} Ko`;
+
+      const item = document.createElement("div");
+      item.className = "share-item";
+      item.innerHTML = `
+        <span>📄</span>
+        <span class="share-item-name" title="${escHtml(file.name)}">${escHtml(file.name)}</span>
+        <span class="share-item-size">${sizeStr}</span>
+        <span class="share-item-status saving">Envoi…</span>
+      `;
+      document.getElementById("share-list").prepend(item);
+      return item;
+    }
+
+    function escHtml(str) {
+      return str.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    }
+
+    // ── Drag & drop (PC → Mobile) ───────────────────────────
+    async function handleDroppedFiles(files) {
+      if (!sessionId) { alert("Session non démarrée."); return; }
+      for (const file of files) {
+        const itemEl   = addShareItem(file);
+        const statusEl = itemEl.querySelector(".share-item-status");
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          await fetch(`/api/upload/${sessionId}`, { method: "POST", body: formData });
+          statusEl.textContent = "✅ Disponible";
+          statusEl.className   = "share-item-status";
+        } catch (err) {
+          statusEl.textContent = "❌ Erreur";
+          statusEl.className   = "share-item-status";
+          console.error("Erreur partage", file.name, err);
+        }
+      }
+    }
+
+    const shareDrop = document.getElementById("share-drop");
+
+    shareDrop.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      shareDrop.classList.add("active");
+    });
+
+    shareDrop.addEventListener("dragleave", (e) => {
+      if (!shareDrop.contains(e.relatedTarget)) shareDrop.classList.remove("active");
+    });
+
+    shareDrop.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      shareDrop.classList.remove("active");
+      handleDroppedFiles(Array.from(e.dataTransfer.files));
+    });
+
+    newSession();
+  </script>
+
+</body>
+</html>

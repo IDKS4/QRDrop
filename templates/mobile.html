@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>QRDrop — Send</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f0f;
+      color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1.25rem 3rem;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; margin-top: 1rem; }
+    .subtitle { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
+
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 1.25rem;
+    }
+
+    .card-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #555;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Upload ─────────────────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed #333;
+      border-radius: 12px;
+      padding: 2rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 1.25rem;
+    }
+    .drop-zone:hover, .drop-zone.active { border-color: #fff; background: #222; }
+    .drop-zone .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .drop-zone p { color: #888; font-size: 0.9rem; }
+    .drop-zone p strong { color: #f0f0f0; }
+
+    input[type="file"] { display: none; }
+
+    #file-list { margin-bottom: 1.25rem; }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.6rem 0.75rem;
+      background: #111;
+      border-radius: 8px;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+    }
+    .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-size { color: #666; white-space: nowrap; }
+    .file-remove { cursor: pointer; color: #555; font-size: 1.1rem; padding: 0 0.2rem; }
+    .file-remove:hover { color: #f87171; }
+
+    #progress-container { display: none; margin-bottom: 1.25rem; }
+    #progress-bar-wrap {
+      background: #222;
+      border-radius: 999px;
+      height: 8px;
+      overflow: hidden;
+      margin-bottom: 0.4rem;
+    }
+    #progress-bar {
+      height: 100%;
+      background: #fff;
+      border-radius: 999px;
+      width: 0%;
+      transition: width 0.2s;
+    }
+    #progress-label { font-size: 0.82rem; color: #888; text-align: center; }
+
+    #send-btn {
+      width: 100%;
+      padding: 0.85rem;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #send-btn:not(:disabled):hover { opacity: 0.85; }
+
+    #status {
+      text-align: center;
+      margin-top: 1rem;
+      font-size: 0.88rem;
+      min-height: 1.3rem;
+      color: #888;
+    }
+    #status.success { color: #4ade80; }
+    #status.error   { color: #f87171; }
+
+    /* ── PC → Mobile files ──────────────────────────────── */
+    #pc-files-list { display: flex; flex-direction: column; gap: 0.4rem; }
+
+    .pc-file-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.75rem;
+      background: #111;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      text-decoration: none;
+      color: #f0f0f0;
+      transition: background 0.15s;
+    }
+    .pc-file-item:hover { background: #1e1e1e; }
+    .pc-file-item:active { background: #252525; }
+
+    .pc-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pc-file-size { color: #555; font-size: 0.78rem; white-space: nowrap; }
+    .pc-file-dl   { color: #555; font-size: 1rem; flex-shrink: 0; }
+
+    #pc-files-empty {
+      text-align: center;
+      color: #444;
+      font-size: 0.85rem;
+      padding: 1.5rem 0;
+    }
+
+    #pc-files-loading {
+      text-align: center;
+      color: #444;
+      font-size: 0.85rem;
+      padding: 1rem 0;
+    }
+
+    /* ── Thumbnail image (#9) ───────────────────────────────── */
+    .pc-file-thumb {
+      width: 40px; height: 40px;
+      object-fit: cover; border-radius: 6px; flex-shrink: 0;
+    }
+
+    /* ── Text input section Mobile→PC (#8) ─────────────────── */
+    #text-area {
+      width: 100%; min-height: 80px; resize: vertical;
+      background: #111; border: 1px solid #2a2a2a; border-radius: 8px;
+      color: #f0f0f0; font-size: 0.9rem; padding: 0.65rem 0.75rem;
+      font-family: inherit; margin-bottom: 0.75rem;
+    }
+    #text-area:focus { outline: none; border-color: #555; }
+    #text-send-btn {
+      width: 100%; padding: 0.75rem; background: #fff; color: #000;
+      border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    #text-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #text-send-btn:not(:disabled):hover { opacity: 0.85; }
+    #text-status { font-size: 0.82rem; color: #888; text-align: center; margin-top: 0.5rem; min-height: 1.2rem; }
+    #text-status.success { color: #4ade80; }
+    #text-status.error   { color: #f87171; }
+
+    /* ── Texts received from PC ─────────────────────────────── */
+    .text-from-pc-item {
+      display: flex; align-items: flex-start; gap: 0.5rem;
+      background: #111; border-radius: 8px;
+      padding: 0.6rem 0.75rem; margin-bottom: 0.4rem; font-size: 0.85rem;
+    }
+    .text-from-pc-content { flex: 1; word-break: break-word; white-space: pre-wrap; color: #ccc; }
+    .btn-copy {
+      flex-shrink: 0; background: transparent;
+      border: 1px solid #333; color: #666; border-radius: 5px;
+      font-size: 0.72rem; padding: 0.15rem 0.45rem; cursor: pointer;
+    }
+    .btn-copy:hover { color: #fff; border-color: #666; }
+
+    /* ── ZIP button (#10) ───────────────────────────────────── */
+    #download-all-btn {
+      display: none; width: 100%; padding: 0.65rem;
+      background: transparent; color: #888;
+      border: 1px solid #2a2a2a; border-radius: 10px;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer;
+      margin-top: 0.75rem; transition: border-color 0.15s, color 0.15s;
+    }
+    #download-all-btn:hover { border-color: #555; color: #fff; }
+
+    .badge-new {
+      display: inline-block;
+      background: #4ade80;
+      color: #000;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 0.3rem;
+      vertical-align: middle;
+      animation: fadeout 3s ease forwards;
+    }
+    @keyframes fadeout {
+      0%   { opacity: 1; }
+      70%  { opacity: 1; }
+      100% { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📦 QRDrop</h1>
+  <p class="subtitle">Connected to PC ✅</p>
+
+  <!-- ── Upload section (Mobile → PC) ───────────────────── -->
+  <div class="card">
+    <p class="card-title">📤 Send to PC</p>
+
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="icon">📁</div>
+      <p><strong>Tap to choose</strong></p>
+      <p>one or more files</p>
+    </div>
+    <input type="file" id="file-input" multiple>
+
+    <div id="file-list"></div>
+
+    <div id="progress-container">
+      <div id="progress-bar-wrap">
+        <div id="progress-bar"></div>
+      </div>
+      <p id="progress-label">0%</p>
+    </div>
+
+    <button id="send-btn" disabled onclick="sendFiles()">Send</button>
+    <p id="status"></p>
+  </div>
+
+  <!-- ── Text section (Mobile → PC) (#8) ────────────────── -->
+  <div class="card">
+    <p class="card-title">💬 Send text to PC</p>
+    <textarea id="text-area" placeholder="Paste or type text, a link, a note…" maxlength="10000"></textarea>
+    <button id="text-send-btn" onclick="sendText()">Send</button>
+    <p id="text-status"></p>
+  </div>
+
+  <!-- ── Texts from PC ──────────────────────────────────── -->
+  <div class="card" id="texts-from-pc-card" style="display:none">
+    <p class="card-title">💬 Texts from PC</p>
+    <div id="texts-from-pc-list"></div>
+  </div>
+
+  <!-- ── Download section (PC → Mobile) ──────────────────── -->
+  <div class="card">
+    <p class="card-title">📥 Files available from PC</p>
+    <div id="pc-files-loading">Loading…</div>
+    <div id="pc-files-list" style="display:none"></div>
+    <p id="pc-files-empty" style="display:none">No files available yet.</p>
+    <button id="download-all-btn" onclick="downloadAll()">🗜️ Download all (.zip)</button>
+  </div>
+
+  <script>
+    const sessionId = location.pathname.split("/").pop();
+    let selectedFiles = [];
+
+    // ── WebSocket — real-time ───────────────────────────────
+    (function connectWS() {
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${proto}://${location.host}/ws/${sessionId}`);
+
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "file_received")   { loadPcFiles(true); }           // PC received a file from us → reload list
+        if (msg.type === "file_added")      { addPcFileItem(msg, true); }    // future: PC could push file_added
+        if (msg.type === "file_deleted")    { onFileDeleted(msg); }
+        if (msg.type === "text_to_mobile")  { onTextFromPc(msg); }
+        if (msg.type === "session_expired") { document.querySelector(".subtitle").textContent = "Session expired ⚠️"; }
+      };
+
+      ws.onclose = () => setTimeout(connectWS, 2000);
+    })();
+
+    // ── PC → Mobile files ────────────────────────────────
+    async function loadPcFiles(silent = false) {
+      if (!silent) {
+        document.getElementById("pc-files-loading").style.display = "block";
+        document.getElementById("pc-files-list").style.display    = "none";
+        document.getElementById("pc-files-empty").style.display   = "none";
+      }
+
+      try {
+        const res   = await fetch(`/api/files/${sessionId}`);
+        const files = await res.json();
+
+        const listEl  = document.getElementById("pc-files-list");
+        const emptyEl = document.getElementById("pc-files-empty");
+
+        listEl.innerHTML = "";
+
+        if (files.length === 0) {
+          document.getElementById("pc-files-loading").style.display = "none";
+          document.getElementById("download-all-btn").style.display = "none";  // #10
+          listEl.style.display   = "none";
+          emptyEl.style.display  = "block";
+          return;
+        }
+
+        files.forEach(f => addPcFileItem(f, false, listEl));
+
+        document.getElementById("pc-files-loading").style.display = "none";
+        listEl.style.display   = "flex";
+        emptyEl.style.display  = "none";
+
+      } catch (err) {
+        document.getElementById("pc-files-loading").textContent = "Failed to load.";
+      }
+    }
+
+    // ── Icônes MIME (#7) ────────────────────────────────────
+    function mimeIcon(mime) {
+      if (!mime) return "📄";
+      if (mime.startsWith("image/"))  return "🖼️";
+      if (mime.startsWith("video/"))  return "🎬";
+      if (mime.startsWith("audio/"))  return "🎵";
+      if (mime === "application/pdf") return "📕";
+      if (mime.includes("zip") || mime.includes("compressed") || mime.includes("x-tar")) return "🗜️";
+      if (mime.startsWith("text/"))   return "📝";
+      return "📄";
+    }
+
+    function addPcFileItem(file, isNew = false, container = null) {
+      const listEl  = container || document.getElementById("pc-files-list");
+      const emptyEl = document.getElementById("pc-files-empty");
+
+      emptyEl.style.display  = "none";
+      listEl.style.display   = "flex";
+      document.getElementById("pc-files-loading").style.display = "none";
+
+      if (listEl.querySelector(`[data-name="${CSS.escape(file.name)}"]`)) return;
+
+      const sizeStr = file.size > 1_048_576
+        ? `${(file.size / 1_048_576).toFixed(1)} Mo`
+        : `${Math.max(1, Math.round(file.size / 1024))} Ko`;
+
+      // #9: thumbnail if image
+      const isImage = file.mime && file.mime.startsWith("image/");
+      const iconHtml = isImage
+        ? `<img class="pc-file-thumb" src="/api/download/${sessionId}/${encodeURIComponent(file.name)}" alt="">`
+        : `<span>${mimeIcon(file.mime)}</span>`;
+
+      const a = document.createElement("a");
+      a.className    = "pc-file-item";
+      a.dataset.name = file.name;
+      a.href         = `/api/download/${sessionId}/${encodeURIComponent(file.name)}`;
+      a.download     = file.name;
+      a.innerHTML = `
+        ${iconHtml}
+        <span class="pc-file-name" title="${escHtml(file.name)}">${escHtml(file.name)}${isNew ? '<span class="badge-new">NEW</span>' : ''}</span>
+        <span class="pc-file-size">${sizeStr}</span>
+        <span class="pc-file-dl">⬇</span>
+      `;
+      listEl.prepend(a);
+      document.getElementById("download-all-btn").style.display = "block";  // #10: show ZIP button when at least 1 file
+    }
+
+    function escHtml(str) {
+      return str.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    }
+
+    // ── Send text (#8) ───────────────────────────────────────
+    async function sendText() {
+      const area     = document.getElementById("text-area");
+      const statusEl = document.getElementById("text-status");
+      const btn      = document.getElementById("text-send-btn");
+      const content  = area.value.trim();
+      if (!content) return;
+
+      btn.disabled = true;
+      statusEl.textContent = "";
+      statusEl.className   = "";
+      try {
+        const res = await fetch(`/api/text/${sessionId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        area.value           = "";
+        statusEl.textContent = "✅ Text sent!";
+        statusEl.className   = "success";
+        setTimeout(() => { statusEl.textContent = ""; statusEl.className = ""; }, 3000);
+      } catch (err) {
+        statusEl.textContent = "❌ Error: " + err.message;
+        statusEl.className   = "error";
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ── Download all as ZIP (#10) ───────────────────────────
+    function downloadAll() {
+      const a = document.createElement("a");
+      a.href     = `/api/download-all/${sessionId}`;
+      a.download = `QRDrop_${sessionId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    // ── Text received from PC ────────────────────────────────
+    function onTextFromPc(msg) {
+      const card = document.getElementById("texts-from-pc-card");
+      card.style.display = "block";
+
+      const item = document.createElement("div");
+      item.className = "text-from-pc-item";
+
+      const span = document.createElement("span");
+      span.className   = "text-from-pc-content";
+      span.textContent = msg.content;
+
+      const btn = document.createElement("button");
+      btn.className   = "btn-copy";
+      btn.textContent = "Copy";
+      btn.onclick = () => navigator.clipboard.writeText(msg.content).then(() => {
+        btn.textContent = "✅";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+      });
+
+      item.appendChild(span);
+      item.appendChild(btn);
+      document.getElementById("texts-from-pc-list").prepend(item);
+    }
+
+    // ── File deletion on mobile side (#12) ──────────────────
+    function onFileDeleted(msg) {
+      const item = document.querySelector(`#pc-files-list [data-name="${CSS.escape(msg.name)}"]`);
+      if (item) item.remove();
+      const listEl = document.getElementById("pc-files-list");
+      if (listEl.children.length === 0) {
+        listEl.style.display = "none";
+        document.getElementById("pc-files-empty").style.display   = "block";
+        document.getElementById("download-all-btn").style.display = "none";
+      }
+    }
+
+    // Initial load
+    loadPcFiles();
+
+    // ── File selection (Upload) ──────────────────────────────
+    document.getElementById("file-input").addEventListener("change", (e) => {
+      selectedFiles = [...selectedFiles, ...Array.from(e.target.files)];
+      renderFileList();
+    });
+
+    function renderFileList() {
+      const list = document.getElementById("file-list");
+      list.innerHTML = "";
+      selectedFiles.forEach((file, idx) => {
+        const sizeStr = file.size > 1_048_576
+          ? `${(file.size / 1_048_576).toFixed(1)} Mo`
+          : `${(file.size / 1024).toFixed(0)} Ko`;
+        const item = document.createElement("div");
+        item.className = "file-item";
+        item.innerHTML = `
+          <span>📄</span>
+          <span class="file-name" title="${escHtml(file.name)}">${escHtml(file.name)}</span>
+          <span class="file-size">${sizeStr}</span>
+          <span class="file-remove" onclick="removeFile(${idx})">✕</span>
+        `;
+        list.appendChild(item);
+      });
+      document.getElementById("send-btn").disabled = selectedFiles.length === 0;
+    }
+
+    function removeFile(idx) {
+      selectedFiles.splice(idx, 1);
+      renderFileList();
+    }
+
+    // ── File sending ────────────────────────────────────────
+    async function sendFiles() {
+      if (selectedFiles.length === 0) return;
+
+      const btn       = document.getElementById("send-btn");
+      const statusEl  = document.getElementById("status");
+      const progWrap  = document.getElementById("progress-container");
+      const progBar   = document.getElementById("progress-bar");
+      const progLabel = document.getElementById("progress-label");
+
+      btn.disabled = true;
+      progWrap.style.display = "block";
+      statusEl.textContent   = "";
+      statusEl.className     = "";
+
+      let sent = 0, errors = 0;
+
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          await uploadWithProgress(formData, (pct) => {
+            const globalPct = Math.round(((i + pct / 100) / selectedFiles.length) * 100);
+            progBar.style.width   = globalPct + "%";
+            progLabel.textContent = `${globalPct}% — ${file.name}`;
+          });
+          sent++;
+        } catch (err) {
+          errors++;
+          console.error("Erreur envoi", file.name, err);
+        }
+      }
+
+      progBar.style.width = "100%";
+
+      if (errors === 0) {
+        statusEl.textContent = `✅ ${sent} file(s) sent successfully!`;
+        statusEl.className   = "success";
+        selectedFiles = [];
+        document.getElementById("file-list").innerHTML = "";
+        setTimeout(() => { progWrap.style.display = "none"; progBar.style.width = "0%"; }, 2000);
+      } else {
+        statusEl.textContent = `⚠️ ${sent} succeeded, ${errors} failed.`;
+        statusEl.className   = "error";
+      }
+
+      btn.disabled = selectedFiles.length === 0;
+    }
+
+    function uploadWithProgress(formData, onProgress) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `/api/upload/${sessionId}`);
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+        });
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response);
+          else reject(new Error(`HTTP ${xhr.status}`));
+        });
+        xhr.addEventListener("error", () => reject(new Error("Network error")));
+        xhr.send(formData);
+      });
+    }
+  </script>
+
+</body>
+</html>
